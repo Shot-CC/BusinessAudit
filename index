@@ -1,0 +1,876 @@
+import React, { useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { CheckCircle2, Lock, ArrowRight, Sparkles } from "lucide-react";
+
+type StepId =
+  | "landing"
+  | "intro"
+  | "q1"
+  | "q2"
+  | "q3"
+  | "q4"
+  | "q5"
+  | "branchA1"
+  | "branchA2"
+  | "branchA3"
+  | "branchB1"
+  | "branchB2"
+  | "branchB3"
+  | "branchC1"
+  | "branchC2"
+  | "branchD1"
+  | "branchD2"
+  | "branchE1"
+  | "q9"
+  | "q10"
+  | "loading"
+  | "result"
+  | "paywall"
+  | "fullPlan";
+
+type ConstraintType =
+  | "Not enough leads"
+  | "Leads but not converting"
+  | "Customers not coming back"
+  | "Operations are messy / inefficient"
+  | "I’m not sure"
+  | "";
+
+type Answers = {
+  q1: string;
+  q2: string;
+  q3: string;
+  q4: string;
+  q5: ConstraintType;
+  branchA1: string;
+  branchA2: string;
+  branchA3: string;
+  branchB1: string;
+  branchB2: string;
+  branchB3: string;
+  branchC1: string;
+  branchC2: string;
+  branchD1: string;
+  branchD2: string;
+  branchE1: string;
+  q9: string;
+  q10: string;
+};
+
+const initialAnswers: Answers = {
+  q1: "",
+  q2: "",
+  q3: "",
+  q4: "",
+  q5: "",
+  branchA1: "",
+  branchA2: "",
+  branchA3: "",
+  branchB1: "",
+  branchB2: "",
+  branchB3: "",
+  branchC1: "",
+  branchC2: "",
+  branchD1: "",
+  branchD2: "",
+  branchE1: "",
+  q9: "",
+  q10: "",
+};
+
+const fadeUp = {
+  initial: { opacity: 0, y: 14 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -10 },
+  transition: { duration: 0.22 },
+};
+
+const optionCardClass =
+  "w-full rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-left text-sm text-zinc-900 shadow-sm transition hover:border-zinc-900 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-zinc-300";
+
+function QuestionShell({
+  step,
+  total,
+  title,
+  subtitle,
+  children,
+}: {
+  step: number;
+  total: number;
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-h-screen bg-stone-50 text-zinc-900">
+      <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-6 py-8 md:px-10 md:py-10">
+        <div className="mb-10">
+          <div className="mb-3 flex items-center justify-between text-sm text-zinc-500">
+            <span>Step {step} of {total}</span>
+            <span>{Math.round((step / total) * 100)}% complete</span>
+          </div>
+          <Progress value={(step / total) * 100} className="h-2 bg-zinc-200" />
+        </div>
+
+        <AnimatePresence mode="wait">
+          <motion.div key={title} {...fadeUp} className="flex-1">
+            <div className="mb-8">
+              <h1 className="max-w-2xl text-3xl font-semibold tracking-tight md:text-4xl">
+                {title}
+              </h1>
+              {subtitle ? (
+                <p className="mt-3 max-w-xl text-base leading-7 text-zinc-600">
+                  {subtitle}
+                </p>
+              ) : null}
+            </div>
+            <div className="space-y-3">{children}</div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+function OptionGrid({
+  options,
+  onSelect,
+}: {
+  options: string[];
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-3">
+      {options.map((option) => (
+        <button key={option} className={optionCardClass} onClick={() => onSelect(option)}>
+          {option}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TextQuestion({
+  placeholder,
+  value,
+  onChange,
+  onContinue,
+  buttonText = "Continue",
+}: {
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+  onContinue: () => void;
+  buttonText?: string;
+}) {
+  return (
+    <div className="space-y-4">
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="min-h-[160px] w-full rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-sm text-zinc-900 shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-zinc-900"
+      />
+      <Button
+        onClick={onContinue}
+        disabled={!value.trim()}
+        className="h-12 rounded-2xl bg-zinc-900 px-6 text-sm text-white hover:bg-zinc-800"
+      >
+        {buttonText}
+      </Button>
+    </div>
+  );
+}
+
+function formatVisibleInsight(answers: Answers) {
+  const business = answers.q1.toLowerCase();
+  const constraint = answers.q5;
+
+  if (constraint === "Not enough leads") {
+    return {
+      title: "Your pipeline is too dependent on chance",
+      body:
+        business.includes("local") || business.includes("service")
+          ? "Right now, new work looks too dependent on referrals, repeat luck, or inconsistent outreach. That means revenue can swing even when the quality of your work is good. The fastest move is to build one reliable source of inbound demand you control. Start by contacting your last 10 customers within the next 48 hours, ask for a review, and turn those reviews into the foundation of a stronger local lead engine."
+          : "Right now, your acquisition flow looks inconsistent rather than systematic. That creates volatility at the top of your funnel and makes growth harder to predict. The fastest move is to strengthen one owned or repeatable channel first, then layer more acquisition on top once that base is stable." ,
+    };
+  }
+
+  if (constraint === "Leads but not converting") {
+    return {
+      title: "You are leaking value after interest shows up",
+      body:
+        "You do not appear to have an awareness problem first. You have a conversion problem. People are getting close enough to consider buying, but something in the handoff, follow up, offer clarity, or buying process is causing drop off. The fastest improvement is to identify the single point where momentum dies and tighten that step before spending more effort on bringing in additional leads.",
+    };
+  }
+
+  if (constraint === "Customers not coming back") {
+    return {
+      title: "You are winning the first sale but underusing the relationship",
+      body:
+        "Right now, too much value may be left on the table after a customer buys once. That usually means weak follow up, weak reactivation, or no simple reason to come back. The quickest win is to create one clear post purchase follow up that asks for the next step, the next booking, or a referral while the customer experience is still fresh.",
+    };
+  }
+
+  if (constraint === "Operations are messy / inefficient") {
+    return {
+      title: "The business is working, but the system underneath it is messy",
+      body:
+        "The issue is not effort. It is operational drag. If too much of your time is going into admin, reactive work, or repeated fixes, growth gets capped by how much chaos you can personally absorb. The fastest win is to identify one recurring task that keeps breaking and document a repeatable process for it this week."
+    };
+  }
+
+  return {
+    title: "Your first priority is clarity, not another tactic",
+    body:
+      "Right now, the biggest issue is that the real bottleneck is not fully visible yet. That is normal, but it means guessing at solutions will waste time. The fastest move is to track your last 10 leads or customers, note where they came from, what happened next, and where momentum dropped. That will show you what actually needs fixing before you put more effort into the wrong area.",
+  };
+}
+
+function getLockedInsights(answers: Answers) {
+  const category = answers.q5 || "General";
+  return [
+    `A second ${category.toLowerCase()} insight tailored to your answers`,
+    "A practical systems improvement you can act on this week",
+    "A missed opportunity most businesses at your stage overlook",
+    "A clearer next step based on what you said you have already tried",
+  ];
+}
+
+function getFullInsights(answers: Answers) {
+  const first = formatVisibleInsight(answers);
+  return [
+    {
+      title: first.title,
+      body: first.body,
+    },
+    {
+      title: "There is likely one obvious bottleneck you are underweighting",
+      body:
+        "Based on your answers, one part of the business is carrying more pressure than it should. Instead of trying to improve everything, narrow your focus to the step that directly affects revenue movement. That is where your next gains are most likely to come from.",
+    },
+    {
+      title: "Your current approach needs more structure, not more effort",
+      body:
+        "The pattern in your answers suggests you may be relying too much on manual judgment or inconsistent habits. Cleaner process beats more hustle here. Put one repeatable workflow in place and measure whether it improves response time, conversion, or retention.",
+    },
+    {
+      title: "You should fix the nearest revenue lever before expanding",
+      body:
+        "The right next move is not necessarily more activity. It is strengthening the revenue lever closest to the money. That could mean lead response, sales process, follow up, reactivation, or offer clarity. Improve the closest broken step first, then scale from there.",
+    },
+    {
+      title: "Your next 30 days should be focused, not scattered",
+      body:
+        "You will get better results by choosing one measurable priority and building around it. Use the next month to commit to one operational improvement, one growth improvement, and one piece of simple tracking so you can see whether progress is actually happening.",
+    },
+  ];
+}
+
+export default function AIBusinessAuditUIMVP() {
+  const [step, setStep] = useState<StepId>("landing");
+  const [answers, setAnswers] = useState<Answers>(initialAnswers);
+  const [email, setEmail] = useState("");
+
+  const flowOrder = useMemo(() => {
+    const branchSteps: StepId[] =
+      answers.q5 === "Not enough leads"
+        ? ["branchA1", "branchA2", "branchA3"]
+        : answers.q5 === "Leads but not converting"
+          ? ["branchB1", "branchB2", "branchB3"]
+          : answers.q5 === "Customers not coming back"
+            ? ["branchC1", "branchC2"]
+            : answers.q5 === "Operations are messy / inefficient"
+              ? ["branchD1", "branchD2"]
+              : answers.q5 === "I’m not sure"
+                ? ["branchE1"]
+                : [];
+
+    return ["q1", "q2", "q3", "q4", "q5", ...branchSteps, "q9", "q10"] as StepId[];
+  }, [answers.q5]);
+
+  const currentStepIndex = Math.max(flowOrder.indexOf(step), 0) + 1;
+  const totalQuestionSteps = flowOrder.length;
+
+  const goToNext = (current: StepId) => {
+    const idx = flowOrder.indexOf(current);
+    if (idx === -1 || idx === flowOrder.length - 1) {
+      setStep("loading");
+      setTimeout(() => setStep("result"), 1800);
+      return;
+    }
+    setStep(flowOrder[idx + 1]);
+  };
+
+  const setAnswerAndNext = (key: keyof Answers, value: string, current: StepId) => {
+    setAnswers((prev) => ({ ...prev, [key]: value }));
+    if (key === "q5") {
+      const mapped = value as ConstraintType;
+      const nextMap: Record<ConstraintType, StepId> = {
+        "Not enough leads": "branchA1",
+        "Leads but not converting": "branchB1",
+        "Customers not coming back": "branchC1",
+        "Operations are messy / inefficient": "branchD1",
+        "I’m not sure": "branchE1",
+        "": "q9",
+      };
+      setTimeout(() => setStep(nextMap[mapped]), 120);
+      return;
+    }
+    setTimeout(() => goToNext(current), 120);
+  };
+
+  const visibleInsight = formatVisibleInsight(answers);
+  const lockedInsights = getLockedInsights(answers);
+  const fullInsights = getFullInsights(answers);
+
+  if (step === "landing") {
+    return (
+      <div className="min-h-screen bg-stone-50 text-zinc-900">
+        <div className="mx-auto flex min-h-screen max-w-6xl flex-col justify-between px-6 py-8 md:px-10 md:py-10">
+          <div className="flex items-center justify-between">
+            <div className="text-lg font-semibold tracking-tight">Clarity Audit</div>
+            <div className="hidden rounded-full border border-zinc-200 bg-white px-3 py-1 text-sm text-zinc-500 md:block">
+              Free business audit
+            </div>
+          </div>
+
+          <div className="grid items-center gap-12 py-10 md:grid-cols-2 md:py-16">
+            <div>
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1 text-sm text-zinc-600 shadow-sm">
+                <Sparkles className="h-4 w-4" />
+                Tailored to your business
+              </div>
+              <h1 className="max-w-xl text-5xl font-semibold tracking-tight md:text-6xl">
+                Fix your biggest business bottleneck in 2 minutes
+              </h1>
+              <p className="mt-5 max-w-lg text-lg leading-8 text-zinc-600">
+                Answer a few quick questions and get real, actionable insights based on how your business actually works.
+              </p>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Button
+                  onClick={() => setStep("intro")}
+                  className="h-12 rounded-2xl bg-zinc-900 px-6 text-sm text-white hover:bg-zinc-800"
+                >
+                  Start free audit
+                </Button>
+                <Button variant="outline" className="h-12 rounded-2xl border-zinc-300 bg-white px-6 text-sm">
+                  See example result
+                </Button>
+              </div>
+              <div className="mt-6 flex flex-wrap gap-3 text-sm text-zinc-500">
+                <span>No signup required</span>
+                <span>Takes about 2 minutes</span>
+                <span>Built for real businesses</span>
+              </div>
+            </div>
+
+            <Card className="rounded-[28px] border-zinc-200 bg-white shadow-xl shadow-zinc-200/50">
+              <CardContent className="p-7">
+                <div className="mb-5 text-sm font-medium text-zinc-500">What you get</div>
+                <div className="space-y-4">
+                  {[
+                    "A clear view of your biggest growth constraint",
+                    "One free insight you can act on immediately",
+                    "A fuller plan you can unlock if it hits",
+                  ].map((item) => (
+                    <div key={item} className="flex items-start gap-3 rounded-2xl border border-zinc-100 p-4">
+                      <CheckCircle2 className="mt-0.5 h-5 w-5 flex-none text-zinc-900" />
+                      <p className="text-sm leading-6 text-zinc-700">{item}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "intro") {
+    return (
+      <div className="min-h-screen bg-stone-50 text-zinc-900">
+        <div className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-8 md:px-10">
+          <motion.div {...fadeUp} className="w-full rounded-[28px] border border-zinc-200 bg-white p-8 shadow-lg shadow-zinc-200/50 md:p-10">
+            <div className="mb-4 text-sm font-medium text-zinc-500">Before we start</div>
+            <h1 className="max-w-2xl text-4xl font-semibold tracking-tight">
+              This is not a generic questionnaire
+            </h1>
+            <p className="mt-4 max-w-2xl text-base leading-8 text-zinc-600">
+              We are going to ask a few quick questions to understand how your business operates. Your answers shape the result directly, so the more accurate you are, the better the insight will be.
+            </p>
+            <div className="mt-8 flex gap-3">
+              <Button
+                onClick={() => setStep("q1")}
+                className="h-12 rounded-2xl bg-zinc-900 px-6 text-sm text-white hover:bg-zinc-800"
+              >
+                Continue
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "q1") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="Which best describes your business and how you make money?">
+        <OptionGrid
+          options={[
+            "Service based projects or one off work",
+            "Service based retainers or recurring work",
+            "Product or ecommerce",
+            "SaaS or subscription",
+            "Local business",
+            "Agency",
+            "Other",
+          ]}
+          onSelect={(value) => setAnswerAndNext("q1", value, "q1")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "q2") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="Which best describes where your business is right now?">
+        <OptionGrid
+          options={[
+            "Pre revenue or early under 6 months",
+            "Up to £10k per month and under 1 year old",
+            "£10k to £50k per month and 1 to 3 years old",
+            "£50k to £250k per month and 3 plus years old",
+            "£250k plus and established",
+          ]}
+          onSelect={(value) => setAnswerAndNext("q2", value, "q2")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "q3") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="Which best describes your current financial situation?">
+        <OptionGrid
+          options={[
+            "Profitable and stable",
+            "Profitable but inconsistent",
+            "Break even",
+            "Losing money or investing to grow",
+            "Not sure",
+          ]}
+          onSelect={(value) => setAnswerAndNext("q3", value, "q3")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "q4") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="How big is your team right now?">
+        <OptionGrid
+          options={["Just me", "2 to 5", "6 to 20", "20 plus"]}
+          onSelect={(value) => setAnswerAndNext("q4", value, "q4")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "q5") {
+    return (
+      <QuestionShell
+        step={currentStepIndex}
+        total={totalQuestionSteps}
+        title="What is currently limiting your growth the most?"
+        subtitle="Pick the one that feels most true today."
+      >
+        <OptionGrid
+          options={[
+            "Not enough leads",
+            "Leads but not converting",
+            "Customers not coming back",
+            "Operations are messy / inefficient",
+            "I’m not sure",
+          ]}
+          onSelect={(value) => setAnswerAndNext("q5", value, "q5")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "branchA1") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="Where do your customers come from, and how consistent is that flow?">
+        <OptionGrid
+          options={[
+            "Paid ads and consistent",
+            "Paid ads and inconsistent",
+            "Organic or content",
+            "Referrals or word of mouth",
+            "Outbound",
+            "Not consistent or unpredictable",
+          ]}
+          onSelect={(value) => setAnswerAndNext("branchA1", value, "branchA1")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "branchA2") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="Do you have an audience you can reach directly, and roughly how large is it?">
+        <OptionGrid
+          options={[
+            "No audience",
+            "Small under 500",
+            "Growing 500 to 2000",
+            "Established 2000 to 10000",
+            "Large 10000 plus",
+          ]}
+          onSelect={(value) => setAnswerAndNext("branchA2", value, "branchA2")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "branchA3") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="If you stopped marketing today, how long would new customers still come in?">
+        <OptionGrid
+          options={["They would not", "A few days", "A few weeks", "Consistently"]}
+          onSelect={(value) => setAnswerAndNext("branchA3", value, "branchA3")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "branchB1") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="How does a lead become a customer in your business?">
+        <OptionGrid
+          options={[
+            "Direct purchase with no sales process",
+            "Short process with 1 or 2 steps",
+            "Sales call required",
+            "Multi step process",
+            "Not clearly defined",
+          ]}
+          onSelect={(value) => setAnswerAndNext("branchB1", value, "branchB1")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "branchB2") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="Where do leads usually drop off or lose interest?">
+        <OptionGrid
+          options={[
+            "Website or landing page",
+            "Sales call",
+            "Checkout",
+            "Follow up stage",
+            "Not sure",
+          ]}
+          onSelect={(value) => setAnswerAndNext("branchB2", value, "branchB2")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "branchB3") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="What usually stops someone from buying?">
+        <OptionGrid
+          options={[
+            "Price",
+            "Lack of urgency",
+            "Lack of trust",
+            "Confusion about the offer",
+            "Weak follow up",
+            "Not sure",
+          ]}
+          onSelect={(value) => setAnswerAndNext("branchB3", value, "branchB3")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "branchC1") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="What typically happens after someone buys from you?">
+        <OptionGrid
+          options={[
+            "One time purchase only",
+            "Occasional repeat customers",
+            "Strong repeat business",
+            "Ongoing relationship",
+          ]}
+          onSelect={(value) => setAnswerAndNext("branchC1", value, "branchC1")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "branchC2") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="Do customers come back or refer others?">
+        <OptionGrid
+          options={["Frequently", "Sometimes", "Rarely", "Never", "Not sure"]}
+          onSelect={(value) => setAnswerAndNext("branchC2", value, "branchC2")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "branchD1") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="What takes up most of your time, and where do things feel inefficient?">
+        <OptionGrid
+          options={[
+            "Admin or organisation",
+            "Fulfilment or delivery",
+            "Customer support",
+            "Sales or closing",
+            "Everything feels reactive",
+          ]}
+          onSelect={(value) => setAnswerAndNext("branchD1", value, "branchD1")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "branchD2") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="If you stepped away for a week, what would break first?">
+        <TextQuestion
+          placeholder="Write the first thing that would start to wobble or fall behind"
+          value={answers.branchD2}
+          onChange={(value) => setAnswers((prev) => ({ ...prev, branchD2: value }))}
+          onContinue={() => goToNext("branchD2")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "branchE1") {
+    return (
+      <QuestionShell step={currentStepIndex} total={totalQuestionSteps} title="Which feels closest to your situation right now?">
+        <OptionGrid
+          options={[
+            "We need more customers",
+            "We have customers but growth is slow",
+            "We are busy but not growing",
+            "I do not know what to focus on",
+          ]}
+          onSelect={(value) => setAnswerAndNext("branchE1", value, "branchE1")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "q9") {
+    return (
+      <QuestionShell
+        step={currentStepIndex}
+        total={totalQuestionSteps}
+        title="What do you sell, how is it priced, and why do customers choose you?"
+        subtitle="A short answer is enough."
+      >
+        <TextQuestion
+          placeholder="For example: We provide managed bookkeeping for small businesses on a monthly retainer because clients want reliable support without hiring in house."
+          value={answers.q9}
+          onChange={(value) => setAnswers((prev) => ({ ...prev, q9: value }))}
+          onContinue={() => goToNext("q9")}
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "q10") {
+    return (
+      <QuestionShell
+        step={currentStepIndex}
+        total={totalQuestionSteps}
+        title="What have you already tried, and what would you fix first in the next 30 days?"
+        subtitle="This helps us avoid generic advice and focus on the right next move."
+      >
+        <TextQuestion
+          placeholder="For example: We tried paid ads and some email outreach. If I could fix one thing first it would be getting more qualified leads each month."
+          value={answers.q10}
+          onChange={(value) => setAnswers((prev) => ({ ...prev, q10: value }))}
+          onContinue={() => goToNext("q10")}
+          buttonText="Analyse my business"
+        />
+      </QuestionShell>
+    );
+  }
+
+  if (step === "loading") {
+    return (
+      <div className="min-h-screen bg-stone-50 text-zinc-900">
+        <div className="mx-auto flex min-h-screen max-w-3xl items-center justify-center px-6 py-8 md:px-10">
+          <motion.div {...fadeUp} className="w-full rounded-[28px] border border-zinc-200 bg-white p-10 text-center shadow-lg shadow-zinc-200/50">
+            <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border-4 border-zinc-200 border-t-zinc-900" />
+            <h1 className="text-3xl font-semibold tracking-tight">Analysing your business</h1>
+            <p className="mt-4 text-base leading-7 text-zinc-600">
+              Finding your biggest growth opportunities and shaping the first insight around what matters most right now.
+            </p>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "result") {
+    return (
+      <div className="min-h-screen bg-stone-50 text-zinc-900">
+        <div className="mx-auto max-w-5xl px-6 py-10 md:px-10 md:py-14">
+          <motion.div {...fadeUp} className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+            <Card className="rounded-[28px] border-zinc-200 bg-white shadow-lg shadow-zinc-200/50">
+              <CardContent className="p-8 md:p-10">
+                <div className="mb-4 inline-flex items-center rounded-full border border-zinc-200 bg-stone-50 px-3 py-1 text-sm text-zinc-600">
+                  Your first insight
+                </div>
+                <h1 className="max-w-2xl text-4xl font-semibold tracking-tight">Here is your biggest opportunity right now</h1>
+                <div className="mt-8 rounded-3xl border border-zinc-200 bg-stone-50 p-6 md:p-7">
+                  <h2 className="text-2xl font-semibold tracking-tight">{visibleInsight.title}</h2>
+                  <p className="mt-4 text-base leading-8 text-zinc-700">{visibleInsight.body}</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="space-y-5">
+              <Card className="rounded-[28px] border-zinc-200 bg-white shadow-lg shadow-zinc-200/50">
+                <CardContent className="p-6">
+                  <div className="mb-4 flex items-center gap-2 text-sm font-medium text-zinc-500">
+                    <Lock className="h-4 w-4" />
+                    4 more tailored insights waiting
+                  </div>
+                  <div className="space-y-3">
+                    {lockedInsights.map((item) => (
+                      <div key={item} className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-stone-50 p-4">
+                        <div className="text-sm leading-6 text-zinc-500 blur-[3px] select-none">{item}</div>
+                        <div className="absolute inset-0 bg-white/20" />
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-[28px] border-zinc-200 bg-zinc-900 text-white shadow-lg shadow-zinc-300/30">
+                <CardContent className="p-6">
+                  <div className="text-sm text-zinc-300">Unlock the full plan</div>
+                  <p className="mt-3 text-xl font-semibold tracking-tight">
+                    Get 4 more insights tailored to your business for £9
+                  </p>
+                  <p className="mt-3 text-sm leading-7 text-zinc-300">
+                    Clear actions. No fluff. Built directly from your answers.
+                  </p>
+                  <Button
+                    onClick={() => setStep("paywall")}
+                    className="mt-6 h-12 w-full rounded-2xl bg-white px-6 text-sm text-zinc-900 hover:bg-zinc-100"
+                  >
+                    Unlock full plan
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "paywall") {
+    return (
+      <div className="min-h-screen bg-stone-50 text-zinc-900">
+        <div className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-8 md:px-10">
+          <motion.div {...fadeUp} className="w-full rounded-[28px] border border-zinc-200 bg-white p-8 shadow-lg shadow-zinc-200/50 md:p-10">
+            <h1 className="text-4xl font-semibold tracking-tight">You are one step away from your full growth plan</h1>
+            <p className="mt-4 text-base leading-8 text-zinc-600">
+              Unlock the remaining insights and get a clearer view of what to fix next, where the opportunity is, and how to move forward with more confidence.
+            </p>
+
+            <div className="mt-8 grid gap-3 rounded-3xl border border-zinc-200 bg-stone-50 p-5">
+              {[
+                "4 additional insights tailored to your business",
+                "Clear actions you can implement immediately",
+                "Written to match your business model and stage",
+              ].map((item) => (
+                <div key={item} className="flex items-center gap-3 text-sm text-zinc-700">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 space-y-3">
+              <label className="text-sm text-zinc-500">Email for delivery</label>
+              <Input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@business.com"
+                className="h-12 rounded-2xl border-zinc-200 bg-white"
+              />
+            </div>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Button
+                onClick={() => setStep("fullPlan")}
+                disabled={!email.trim()}
+                className="h-12 rounded-2xl bg-zinc-900 px-6 text-sm text-white hover:bg-zinc-800"
+              >
+                Pay £9 and unlock
+              </Button>
+              <Button variant="outline" onClick={() => setStep("result")} className="h-12 rounded-2xl border-zinc-300 bg-white px-6 text-sm">
+                Back
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-stone-50 text-zinc-900">
+      <div className="mx-auto max-w-5xl px-6 py-10 md:px-10 md:py-14">
+        <motion.div {...fadeUp} className="space-y-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="mb-3 inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1 text-sm text-zinc-600">
+                Full plan unlocked
+              </div>
+              <h1 className="text-4xl font-semibold tracking-tight">Your tailored growth plan</h1>
+              <p className="mt-3 max-w-3xl text-base leading-8 text-zinc-600">
+                These insights are based on the answers you gave and are designed to help you focus on the most important next moves.
+              </p>
+            </div>
+            <Button className="h-12 rounded-2xl bg-zinc-900 px-6 text-sm text-white hover:bg-zinc-800">
+              Generate 30 day plan
+            </Button>
+          </div>
+
+          <div className="grid gap-5">
+            {fullInsights.map((insight, index) => (
+              <Card key={insight.title} className="rounded-[28px] border-zinc-200 bg-white shadow-lg shadow-zinc-200/40">
+                <CardContent className="p-8">
+                  <div className="mb-3 text-sm text-zinc-500">Insight {index + 1}</div>
+                  <h2 className="text-2xl font-semibold tracking-tight">{insight.title}</h2>
+                  <p className="mt-4 text-base leading-8 text-zinc-700">{insight.body}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
